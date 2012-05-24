@@ -1,5 +1,3 @@
-import functools
-
 class classproperty(object):
     '''
     Read-only class property decorator

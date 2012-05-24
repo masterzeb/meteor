@@ -1,5 +1,4 @@
 import sys
-import functools
 
 from pymongo.connection import Connection
 from pymongo.son_manipulator import SONManipulator
@@ -56,7 +55,7 @@ class ConvertToObject(SONManipulator):
                 son['id'] = son['_id']
                 del son['_id']
             cls = getattr(self.db, collection._Collection__name)
-            return cls({'new': False, 'no_validation': True}, **son)
+            return cls(new__=False, validation__=True, **son)
 
 
 class Database(object):
@@ -104,7 +103,9 @@ class Database(object):
         return self._port
 
     def __init__(self, db_name='test', host='127.0.0.1', port=27017,
-            gen_ids=True, change_builtins=True, quiet_output=False):
+            gen_ids=True, change_builtins=True, quiet_output=False,
+            safe_mode=False):
+
         # adding selectors to __builtins__
         if change_builtins:
             from string import ascii_lowercase as ascii_lc
@@ -116,13 +117,19 @@ class Database(object):
         # set quiet output if need
         Selector.quiet_output = quiet_output
 
-        # connect to mongo
+        # set read-only attrs
         self._name = db_name
         self._host = host
         self._port = port
-        self._genids = gen_ids
-        self._quiet_output = quiet_output
 
+        # set attrs
+        self.gen_ids = gen_ids
+        self.quiet_output = quiet_output
+        self.safe_mode = bool(safe_mode)
+        self.safe_opts = safe_mode \
+            if safe_mode and isinstance(safe_mode, dict) else {}
+
+        # connect to mongo
         self._connection = Connection(host, port)[db_name]
 
         # add converter
@@ -193,10 +200,6 @@ class Database(object):
             self.name, self.host, self.port
         )
 
-    @classmethod
-    def make_new_id(self):
-        return ObjectId() if self._meta.db_ref._genids else None
-
 
 class DocumentMeta(type):
     ''' Metaclass for all documents. '''
@@ -217,14 +220,9 @@ class DocumentMeta(type):
                     field, args[2]['__module__'], args[0])
         return type.__new__(self, *args)
 
-    def __call__(self, *opts, **fields):
-        # parse options
-        options = opts[0] if len(opts) else {}
-
-        # is object new or fetched from db
-        new = options.get('new', True)
-        # prevent fields validation or not
-        no_validation = options.get('no_validation', False)
+    def __call__(self, new__=True, validation__=True, **fields):
+        if not fields:
+            raise InitializationError.empty_fieldset_exc(self.__name__)
 
         # create document
         document = type.__call__(self)
@@ -234,7 +232,7 @@ class DocumentMeta(type):
                 raise InitializationError.illegal_argument_exc(
                     self.__name__, field_name)
 
-        if not no_validation:
+        if validation__:
             # TODO: validate fields
             pass
 
@@ -249,8 +247,8 @@ class DocumentMeta(type):
                 id_ = None
                 if 'id' in fields:
                     id_ = fields['id']
-                elif new:
-                    id_ = Database.make_new_id()
+                elif new__:
+                    id_ = ObjectId() if self._meta.db_ref.gen_ids else None
                 setattr(document, 'id', id_)
 
         return document
@@ -263,29 +261,41 @@ class Document(object, metaclass=DocumentMeta):
     '''
 
     @classproperty
-    def provider(self):
-        return self._meta.alias if \
-            hasattr(self._meta, 'alias') else self.__name__
+    def all(self):
+        return Query(self).filter()
 
     @classproperty
     def cursor(self):
         if hasattr(self._meta, 'db_ref'):
             return self._meta.db_ref._connection[self.provider]
 
+    @classproperty
+    def provider(self):
+        return self._meta.alias if \
+            hasattr(self._meta, 'alias') else self.__name__
+
+    @odmclassmethod
+    @query_method
+    def count(self):
+        pass
+
+    @odmclassmethod
+    @query_method
+    def create(self, *args, **kwargs):
+        pass
+
     @odmclassmethod
     @query_method
     def filter(self, *args, **kwargs):
         pass
-
-    @classproperty
-    def all(self):
-        return Query(self).filter()
 
     @odmclassmethod
     @query_method
     def one(self, *args, **kwargs):
         pass
 
-    @odmclassmethod
-    def count(self):
-        return self.cursor.count()
+    def remove(self):
+        pass
+
+    def save(self):
+        pass

@@ -19,6 +19,13 @@ class ClassmethodError(MeteorError):
 
 class InitializationError(MeteorError):
     @classmethod
+    def empty_fieldset_exc(self, classname):
+        return self(
+            'Can not create "{0}" instance with empty fieldset'\
+            .format(classname)
+        )
+
+    @classmethod
     def illegal_argument_exc(self, classname, arg):
         return self(
             '{0}.__init__() takes illegal argument "{1}"' \
@@ -27,6 +34,15 @@ class InitializationError(MeteorError):
 
 
 class SchemaError(MeteorError):
+    @classmethod
+    def collection_binding_exc(self, collection):
+        return self(
+            '''Can not use nor the class name "{0}" nor the alias "{1}" as
+            collection binding - both of them already in use. \
+            Try switch to another.''' \
+            .format(collection.__name__, collection._meta.alias)
+        )
+
     @classmethod
     def field_naming_exc(self, name, module, schema):
         return self(
@@ -45,15 +61,6 @@ class SchemaError(MeteorError):
             .format(name, module, schema)
         )
 
-    @classmethod
-    def collection_binding_exc(self, collection):
-        return self(
-            '''Can not use nor the class name "{0}" nor the alias "{1}" as
-            collection binding - both of them already in use. \
-            Try switch to another.''' \
-            .format(collection.__name__, collection._meta.alias)
-        )
-
 
 class SelectorError(MeteorError):
     ''' Selector exception '''
@@ -68,6 +75,16 @@ class SelectorError(MeteorError):
         )
 
     @classmethod
+    def uncertain_key_exc(self, selector):
+        return self(
+            '''Can not create a conditional selector "{0}" with an uncertain \
+            key.\nDescription: non-keyword arguments requires a key and \
+            keyword arguments was given or not all non-keyword arguments \
+            requires a key.'''
+            .format(selector.__class__.__name__)
+        )
+
+    @classmethod
     def value_type_exc(self, selector, kw, value, types, many=False):
         return self(
             '{0} value{1} of selector "{2}" must be "{3}", not "{4}".'.format(
@@ -78,28 +95,52 @@ class SelectorError(MeteorError):
             )
         )
 
-    @classmethod
-    def uncertain_key_exc(self, selector):
-        return self(
-            '''Can not create a conditional selector "{0}" with an uncertain \
-            key.\nDescription: non-keyword arguments requires a key and \
-            keyword arguments was given or not all non-keyword arguments \
-            requires a key.'''
-            .format(selector.__class__.__name__)
-        )
-
 
 class QueryError(MeteorError):
+    @classmethod
+    def excess_key_exc(self, key, selector):
+        return self(
+            'Excess key "{0}" for "{1}" selector in query method "filter"' \
+            .format(key, selector.__class__.__name__)
+        )
+
+    @classmethod
+    def fetch_exc(self, cast_type):
+        return self(
+            '''Argument "cast_to" of query method "fetch" must be "object" or \
+            "dict" not "{0}"'''.format(cast_type)
+        )
+
+    @classmethod
+    def forbidden_method_exc(self, method, last_method):
+        return self('"{0}" method can not be used after "{1}" method' \
+            .format(method, last_method))
+
+    @classmethod
+    def illegal_key_exc(self, key):
+        return self(
+            'Query method "filter" takes illegal keyword argument "{0}"' \
+            .format(key)
+        )
+
+    @classmethod
+    def slice_steps_exc(self):
+        return self('Query instances does not support slice steps')
+
+    @classmethod
+    def subscribe_exc(self):
+        return self(
+            '''Query object subscribing supports slicing and indexing by int \
+            only. \nDescription: If you want to access data you should \
+            subscribe query.data object'''
+        )
+
     @classmethod
     def subset_uniform_exc(self, subset):
         return self(
             '''Subset must be either the inclusion or exclusion of fields.\
             \nDescription: subset query contains {0}'''.format(str(subset))
         )
-
-    @classmethod
-    def fetch_exc(self):
-        return self()
 
 
 class ValidationError(MeteorError):

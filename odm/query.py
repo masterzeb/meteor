@@ -1,55 +1,43 @@
 import logging
-import functools
 
 from .selectors import Selector, ConditionalSelector
-from ..helpers.dictonary import extend
+from ..helpers.dictonaries import extend
 from ..exceptions import QueryError
 
 
 def query_method(method):
-    @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         query = Query(self)
         return getattr(query, method.__name__)(*args, **kwargs)
     return wrapper
 
-
 def check_method(method):
-    @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
-        if all(m.startswith('-') for m in self.allowed_methods):
-            if '-' + method.__name__ in self.allowed_methods:
-                raise
-        elif not method.__name__ in self.allowed_methods:
-            # TODO: make exception (forbidden method after self.last_method)
-            raise
+        if hasattr(self, 'last_method'):
+            exc = QueryError.forbidden_method_exc(
+                method.__name__, self.last_method)
+            if all(m.startswith('-') for m in self.allowed_methods):
+                if '-' + method.__name__ in self.allowed_methods:
+                    raise exc
+            elif not method.__name__ in self.allowed_methods:
+                raise exc
         self.last_method = method.__name__
         return method(self, *args, **kwargs)
     return wrapper
 
+def set_safe_mode(method):
+    def wrapper(self, safe__=None, *args, **kwargs):
+        # get database options
+        opts = {'safe': self.scheme._meta.db_ref.safe_mode}
+        opts.update(self.scheme._meta.db_ref.safe_opts)
 
-def check_selectors(method):
-    @functools.wraps(method)
-    def wrapper(self, *args, **kwargs):
-        selectors = {}
-        for key, value in kwargs.items():
-            if not isinstance(value, Selector):
-                selector = eq(value)
-            else:
-                selector = value
-
-            if not selector.require_key:
-                raise # excess key
-            selector.associate(key)
-            selectors[key] = [selector]
-
-        for selector in args:
-            if selector.require_key:
-                raise # no key
-        if args:
-            selectors[None] = list(args)
-
-        return method(self, selectors)
+        if isinstance(safe__, bool):
+            opts = {'safe': safe__}
+        elif isinstance(safe__, dict):
+            opts['safe'] = True
+            opts.update(safe__)
+        self._safe_opts = opts
+        return method(self, *args, **kwargs)
     return wrapper
 
 
@@ -58,14 +46,44 @@ class Query(object):
 
     def __init__(self, scheme):
         self.scheme = scheme
-        self.allowed_methods = ['filter', 'update', 'insert']
+        self.allowed_methods = ['count', 'create', 'filter', 'remove']
 
         self.methods = []
         self.args = []
         self.prepare_funcs = []
 
     def __iter__(self):
+        self._rewind()
         return self.cursor
+
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            if key.step:
+                raise QueryError.slice_step_exc()
+
+            if key.stop == key.start:
+                return self
+
+            limit = skip = 0
+            if (key.stop and key.stop < 0) or (key.start and key.start < 0):
+                count = self.scheme.count()
+            if key.start:
+                skip = key.start if key.start >= 0 else count + key.start
+            if key.stop:
+                limit = key.stop if key.stop >=0 else count + key.stop
+                if key.start:
+                    limit -= key.start if key.start > 0 else (count + key.start)
+                if limit <= 0:
+                    self._is_empty = True
+                    return self
+
+        elif isinstance(key, int):
+            limit = 1
+            skip = self.scheme.count() + key if key < 0 \
+                else (key if key > 0 else 0)
+        else:
+            raise QueryError.subscribe_exc()
+        return self.skip(skip).limit(limit)
 
     @property
     def cursor(self):
@@ -75,23 +93,39 @@ class Query(object):
             for method, args, prepare_fn in zip(
                 self.methods, self.args, self.prepare_funcs):
                 self._cursor = getattr(self._cursor, method)(**prepare_fn(args))
-            if not self.last_method == 'count' and \
-               not self.scheme._meta.db_ref._quiet_output:
-                    logging.debug(self.log_prefix + self.js_query)
+            if not self.scheme._meta.db_ref.quiet_output:
+                safe = None
+                if not self.methods[0] == 'find':
+                    safe_opts =\
+                        self._safe_opts if hasattr(self, '_safe_opts') else {}
+                    if safe_opts.get('safe', None):
+                        del safe_opts['safe']
+                        safe = ', safe({0})'.format(str(safe_opts or ''))
+                logging.debug("Mongo query (db='{0}'{1}): {2}".format(
+                    self.scheme._meta.db, safe or '', self.js_query))
         return self._cursor
+
+    @property
+    def data(self):
+        if not hasattr(self, '_data'):
+            self._data = self.fetch()
+        return self._data
 
     @property
     def js_query(self):
         if not hasattr(self, '_js_query'):
             self._js_query = 'db.{0}'.format(self.scheme.provider)
             making_rules = {
+                'count': ((), None),
                 'find': (('spec', 'fields'), None),
+                'insert': (('doc_or_docs', ), None),
+                'limit': (('limit', ), None),
+                'remove': (('spec_or_id', ), None),
                 'sort': (
                     ('key_or_list', ),
                     lambda x: '{' + ', '.join(["'%s': %d" % s for s in x]) + '}'
                 ),
-                'limit': (('limit', ), None),
-                'skip': (('skip', ), None),
+                'skip': (('skip', ), None)
             }
 
             for method, kwargs in zip(self.methods, self.args):
@@ -99,13 +133,11 @@ class Query(object):
                 formatter = formatter or (lambda x: str(x))
                 args = [formatter(kwargs[k]) for k in key_seq if k in kwargs]
                 self._js_query += '.{0}({1})'.format(method, ', '.join(args))
-        return self._js_query
+        return self._js_query.replace('None', 'null') \
+            .replace('True', 'true').replace('False', 'false')
 
-    @property
-    def log_prefix(self):
-        return "Mongo query (db='{0}'): ".format(self.scheme._meta.db)
 
-    def _extend_query(self, method, args, prepare_fn=lambda x: x):
+    def _extend_query(self, method, args={}, prepare_fn=lambda x: x):
         self.methods.append(method)
         self.args.append(args)
         self.prepare_funcs.append(prepare_fn)
@@ -115,26 +147,68 @@ class Query(object):
 
     @check_method
     def count(self):
-        count = self.cursor.count()
-        logging.debug(self.log_prefix + self.js_query + '.count()')
-        return count
+        self._extend_query(method='count')
+        return self.cursor
 
-    def fetch(self):
-        # TODO: realize
-        # instance will object or dict. Result is always tuple.
-        # after that - rewind cursor
-        pass
+    def fetch(self, cast_to=object):
+        if hasattr(self, '_is_empty') and self._is_empty:
+            return tuple()
+        if cast_to == object:
+            data = (x for x in self)
+        elif cast_to == dict:
+            data = (x.__dict__ for x in self)
+        else:
+            raise QueryError.fetch_exc(type(cast_to))
+        self._rewind()
+        return tuple(data)
 
-    @check_selectors
     @check_method
-    def filter(self, selectors):
-        # define allowed methods
-        self.allowed_methods = ['-insert', '-one']
+    def filter(self, *args, **kwargs):
+        # define allowed methods and get allowed keys
+        self.allowed_methods = ['-create', '-one']
+        allowed_keys = self.scheme._meta.fields
+
+        # get raw argumet if exist
+        raw = kwargs.get('raw__', {})
+        if 'raw__' in kwargs:
+            del kwargs['raw__']
+
+        # define validate key function
+        def validate_key(selector):
+            if not selector.key:
+                for nested_selector in selector:
+                    validate_key(nested_selector)
+            elif selector.key not in allowed_keys:
+                raise QueryError.illegal_key_exc(selector.key)
+
+        # parse and check selectors
+        selectors = {}
+        for key, value in kwargs.items():
+            if not isinstance(value, Selector):
+                selector = eq(value)
+            else:
+                selector = value
+
+            if not selector.require_key:
+                raise QueryError.excess_key_exc(key, selector)
+            selector.associate(key)
+            selectors[key] = [selector]
+
+        for selector in args:
+            if selector.require_key:
+                raise # no key
+        if args:
+            selectors[None] = list(args)
+
+        for selectors_list in selectors.values():
+            for selector in selectors_list:
+                validate_key(selector)
 
         if not self.methods:
             # define prepare function
             def prepare_fn(args):
-                selectors_dict = args['spec']
+                spec_key = 'spec' if 'spec' in args else 'spec_or_id'
+                selectors_dict = args.get(spec_key, {})
                 conditionals = []
                 result = {}
                 for k, v in selectors_dict.items():
@@ -168,19 +242,30 @@ class Query(object):
                             result.update({
                                 '$and': [s.prepare() for s in op_selectors]
                             })
-                args['spec'] = result
+                args[spec_key] = result
+                args[spec_key].update(args['raw__'])
+                del args['raw__']
                 return args
 
+
             # extend query
-            self._extend_query(
-                method='find', args={'spec': selectors}, prepare_fn=prepare_fn)
+            self._extend_query(method='find', prepare_fn=prepare_fn,
+                args={'spec': selectors, 'raw__': raw})
         else:
             self.args[0]['spec'] = extend(self.args[0]['spec'], selectors)
+            self.args[0]['raw__'].update(raw)
         return self
 
     @check_method
     def one(self, *args, **kwargs):
         return self.filter(*args, **kwargs).limit(1)[0]
+
+    @check_method
+    def limit(self, limit):
+        if limit:
+            self.allowed_methods = ['sort', 'skip', 'subset']
+            self._extend_query(method='limit', args={'limit': limit})
+        return self
 
     @check_method
     def sort(self, *fields):
@@ -190,6 +275,13 @@ class Query(object):
             self.args[self.methods.index('sort')]['key_or_list'].extend(sorting)
         else:
             self._extend_query(method='sort', args={'key_or_list': sorting})
+        return self
+
+    @check_method
+    def skip(self, skip):
+        if skip:
+            self.allowed_methods = ['limit', 'sort', 'subset']
+            self._extend_query(method='skip', args={'skip': skip})
         return self
 
     @check_method
@@ -215,24 +307,69 @@ class Query(object):
         self.args[0]['fields'] = subset
         return self
 
+    @set_safe_mode
     @check_method
-    def insert(self):
-        # TODO: realize
-        # return lastError if safe else None
-        pass
+    def update(self, multi__=True, upsert__=True, **kwargs):
+        # get raw argumet if exist
+        raw = kwargs.get('raw__', {})
+        if 'raw__' in kwargs:
+            del kwargs['raw__']
 
-    @check_method
-    def update(self):
-        # TODO: realize
-        # return lastError if safe else None
-        pass
+        # TODO: add modifiers parsing
+        modifiers = {}
+        modifiers.update(raw)
 
+        # overwrite filter method
+        self.methods = ['update']
+        self.args[0].update(self._safe_opts)
+        self.args[0].update({
+            'document': modifiers,
+            'multi': multi__,
+            'upsert': upsert__
+        })
+
+        # exec query
+        return self.cursor
+
+    @set_safe_mode
     @check_method
-    def create(self):
-        # TODO: realize
-        # creates new instance and then save it
-        pass
+    def create(self, validation__=True, **kwargs):
+        # create instance
+        instance = self.scheme(validation__=validation__, **kwargs)
+        if instance.id:
+            kwargs['_id'] = instance.id
+
+        # extend query
+        args = {
+            'doc_or_docs': kwargs,
+            'manipulate': True,
+            'check_keys': False
+        }
+        args.update(self._safe_opts)
+        self._extend_query(method='insert', args=args)
+
+        # exec query
+        id_ = self.cursor
+        if not instance.id:
+            instance.id = id_
+        return instance
 
     def refresh(self):
         self.cursor._rewind()
         self.cursor._refresh()
+
+    @set_safe_mode
+    @check_method
+    def remove(self):
+        # overwrite filter method or extend query if no filter execution
+        if len(self.methods):
+            self.methods = ['remove']
+            if 'spec' in self.args[0]:
+                self.args[0]['spec_or_id'] = self.args[0]['spec']
+                del self.args[0]['spec']
+            self.args[0].update(self._safe_opts)
+        else:
+            self._extend_query(method='remove', args=self._safe_opts)
+
+        # exec query
+        return self.cursor

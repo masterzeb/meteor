@@ -1,3 +1,5 @@
+# TODO: add where, regex and other selectors
+
 import functools
 import logging
 import inspect
