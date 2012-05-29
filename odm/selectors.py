@@ -1,6 +1,5 @@
 # TODO: add where, regex and other selectors
 
-import functools
 import logging
 import inspect
 import math
@@ -13,7 +12,6 @@ from ..exceptions import SelectorError
 
 
 def check_args_types(method):
-    @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         # get allowed types
         allowed_types = [list(self.arg_types)]
@@ -46,7 +44,6 @@ def check_args_types(method):
 
 
 def check_args_length(method):
-    @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         # get summary length
         length = len(args) + len(kwargs.keys())
@@ -254,15 +251,16 @@ class CombinedSelector(Selector):
                 return CombinedSelector(self, other)
         return super(CombinedSelector, self).__and__(other)
 
-    def prepare(self):
-        result = {self.key: {}}
+    def prepare(self, with_key=True):
+        key = self.key if with_key else None
+        result = {key: {}}
         for selector in self.selectors:
             val = selector.prepare(with_key=False)
             if isinstance(selector, eq):
-                result[self.key] = val
+                result[key] = val
             else:
-                result[self.key].update(val)
-        return result if result[self.key] else {}
+                result[key].update(val)
+        return (result if result[key] else {}) if with_key else result.get(key)
 
 
 class ConditionalSelector(Selector):

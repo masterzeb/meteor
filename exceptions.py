@@ -33,6 +33,37 @@ class InitializationError(MeteorError):
         )
 
 
+class ModifierError(MeteorError):
+    @classmethod
+    def arg_type_exc(self, modifier, value):
+        return self(
+            'Arguments of modifier "{0}" must be "{1}", not "{2}".'
+            .format(
+                modifier.__class__.__name__,
+                '" or "'.join([str(t.__name__) for t in modifier.arg_types]),
+                type(value).__name__
+            )
+        )
+
+    @classmethod
+    def associate_exc(self, modifier, instance):
+        return self('"{0}" modifier could be assigned to {1}, not to "{2}"' \
+            .format(
+                modifier.__class__.__name__,
+                ' or '.join('"%s"' % cls.__name__ for cls in modifier.for_),
+                instance.__class__.__name__
+            )
+        )
+
+    @classmethod
+    def selector_exc(self, selector):
+        return self(
+            '''"pull" modifier may takes "SimpleSelector" or "CombinedSelector"\
+            not "ConditionalSelector" ("{0}")''' \
+            .format(selector.__class__.__name__)
+        )
+
+
 class SchemaError(MeteorError):
     @classmethod
     def collection_binding_exc(self, collection):
@@ -117,15 +148,27 @@ class QueryError(MeteorError):
             .format(method, last_method))
 
     @classmethod
-    def illegal_key_exc(self, key):
+    def illegal_key_exc(self, method, key):
         return self(
-            'Query method "filter" takes illegal keyword argument "{0}"' \
-            .format(key)
+            'Query method "{0}" takes illegal keyword argument "{1}"' \
+            .format(method, key)
         )
 
     @classmethod
     def slice_steps_exc(self):
         return self('Query instances does not support slice steps')
+
+    @classmethod
+    def special_args_exc(self, arg_type, needed_types, key=None):
+        return self('Special {0}keyword argument{1} must be {2}, not "{3}"' \
+            .format(
+                'non-' if not key else '', ' "%s"' % key if key else 's',
+                ' or '.join('"%s"' % t.__name__ for t in needed_types) if \
+                    isinstance(needed_types, tuple) else \
+                    '"%s"' % needed_types.__name__,
+                arg_type.__name__
+            )
+        )
 
     @classmethod
     def subscribe_exc(self):
@@ -140,20 +183,4 @@ class QueryError(MeteorError):
         return self(
             '''Subset must be either the inclusion or exclusion of fields.\
             \nDescription: subset query contains {0}'''.format(str(subset))
-        )
-
-
-class ValidationError(MeteorError):
-    @classmethod
-    def missing_exc(self, fieldname, classname):
-        return self(
-            'Missing field "{0}" for instance of class "{1}"' \
-            .format(fieldname, classname)
-        )
-
-    @classmethod
-    def type_exc(self, fieldname, classname, type_):
-        return self(
-            'Value of field "{0}" must be "{1}" for instance of class "{2}"' \
-            .format(fieldname, type_, classname)
         )

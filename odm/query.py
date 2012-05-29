@@ -1,6 +1,7 @@
 import logging
 
 from .selectors import Selector, ConditionalSelector
+from .modifiers import Modifier, set_
 from ..helpers.dictonaries import extend
 from ..exceptions import QueryError
 
@@ -25,6 +26,21 @@ def check_method(method):
         return method(self, *args, **kwargs)
     return wrapper
 
+def check_special_args(method):
+    def wrapper(self, *args, **kwargs):
+        for arg in args:
+            if not isinstance(arg, bool):
+                raise QueryError.special_args_exc(type(arg), bool)
+        for k, v in kwargs.items():
+            if k.endswith('__'):
+                if k == 'raw__':
+                    if not isinstance(v, dict):
+                        raise QueryError.special_args_exc(type(v), dict, k)
+                elif not isinstance(v, bool):
+                    raise QueryError.special_args_exc(type(v), bool, k)
+        return method(self, *args, **kwargs)
+    return wrapper
+
 def set_safe_mode(method):
     def wrapper(self, safe__=None, *args, **kwargs):
         # get database options
@@ -36,6 +52,9 @@ def set_safe_mode(method):
         elif isinstance(safe__, dict):
             opts['safe'] = True
             opts.update(safe__)
+        elif safe__ is not None:
+            raise QueryError.special_args_exc(
+                type(safe__), (dict, bool), 'safe__')
         self._safe_opts = opts
         return method(self, *args, **kwargs)
     return wrapper
@@ -125,7 +144,8 @@ class Query(object):
                     ('key_or_list', ),
                     lambda x: '{' + ', '.join(["'%s': %d" % s for s in x]) + '}'
                 ),
-                'skip': (('skip', ), None)
+                'skip': (('skip', ), None),
+                'update': (('spec', 'document', 'upsert', 'multi'), None)
             }
 
             for method, kwargs in zip(self.methods, self.args):
@@ -176,10 +196,10 @@ class Query(object):
         # define validate key function
         def validate_key(selector):
             if not selector.key:
-                for nested_selector in selector:
+                for nested_selector in selector.selectors:
                     validate_key(nested_selector)
             elif selector.key not in allowed_keys:
-                raise QueryError.illegal_key_exc(selector.key)
+                raise QueryError.illegal_key_exc('filter', selector.key)
 
         # parse and check selectors
         selectors = {}
@@ -196,7 +216,7 @@ class Query(object):
 
         for selector in args:
             if selector.require_key:
-                raise # no key
+                raise # TODO: make exception - no key
         if args:
             selectors[None] = list(args)
 
@@ -258,7 +278,7 @@ class Query(object):
 
     @check_method
     def one(self, *args, **kwargs):
-        return self.filter(*args, **kwargs).limit(1)[0]
+        return self.filter(*args, **kwargs)[0].data[0]
 
     @check_method
     def limit(self, limit):
@@ -289,10 +309,6 @@ class Query(object):
         self.allowed_methods = ['limit', 'skip', 'sort', 'subset']
 
         subset = {f.lstrip('-'): int(f[0] != '-') for f in fields}
-        if 'id' in subset:
-            subset['_id'] = subset['id']
-            del subset['id']
-
         subset.update(self.args[0].get('fields', {}))
         if '_id' in subset:
             del subset['_id']
@@ -308,16 +324,23 @@ class Query(object):
         return self
 
     @set_safe_mode
+    @check_special_args
     @check_method
-    def update(self, multi__=True, upsert__=True, **kwargs):
+    def update(self, multi__=True, upsert__=False, **kwargs):
         # get raw argumet if exist
         raw = kwargs.get('raw__', {})
         if 'raw__' in kwargs:
             del kwargs['raw__']
 
-        # TODO: add modifiers parsing
-        modifiers = {}
-        modifiers.update(raw)
+        modifiers = raw
+        for k, v in kwargs.copy().items():
+            if not k in self.scheme._meta.fields:
+                raise QueryError.illegal_key_exc('update', k)
+            if not isinstance(v, Modifier):
+                v = set_(v)
+            v.associate(k, getattr(self.scheme, k))
+            modifiers = extend(modifiers, v.prepare())
+
 
         # overwrite filter method
         self.methods = ['update']
@@ -332,15 +355,17 @@ class Query(object):
         return self.cursor
 
     @set_safe_mode
+    @check_special_args
     @check_method
     def create(self, validation__=True, **kwargs):
         # create instance
         instance = self.scheme(validation__=validation__, **kwargs)
-        if instance.id:
-            kwargs['_id'] = instance.id
+        if instance._id:
+            kwargs['_id'] = instance._id
 
         # extend query
         args = {
+            # TODO: may be formatted instance.__dict__ instead of kwargs?
             'doc_or_docs': kwargs,
             'manipulate': True,
             'check_keys': False
@@ -349,9 +374,9 @@ class Query(object):
         self._extend_query(method='insert', args=args)
 
         # exec query
-        id_ = self.cursor
-        if not instance.id:
-            instance.id = id_
+        _id = self.cursor
+        if not instance._id:
+            instance._id = _id
         return instance
 
     def refresh(self):

@@ -1,11 +1,11 @@
 import sys
+import inspect
 
 from pymongo.connection import Connection
 from pymongo.son_manipulator import SONManipulator
 from pymongo.objectid import ObjectId
 
-from ..exceptions import (SchemaError, ValidationError,
-    InitializationError, ClassmethodError)
+from ..exceptions import SchemaError, InitializationError, ClassmethodError
 
 from ..helpers.plural import Plural
 from ..helpers.decorators import classproperty
@@ -51,9 +51,6 @@ class ConvertToObject(SONManipulator):
                     field = (getattr(coll, k))
                     return field.type_(v)
         else:
-            if '_id' in son:
-                son['id'] = son['_id']
-                del son['_id']
             cls = getattr(self.db, collection._Collection__name)
             return cls(new__=False, validation__=True, **son)
 
@@ -110,9 +107,12 @@ class Database(object):
         if change_builtins:
             from string import ascii_lowercase as ascii_lc
             from meteor.odm import selectors
-            for selector in [getattr(selectors, name) \
-                for name in dir(selectors) if name[0] in ascii_lc]:
-                    __builtins__[selector.__name__] = selector
+            from meteor.odm import modifiers
+
+            for module in (selectors, modifiers):
+                for item in [val for name, val in module.__dict__.items() \
+                    if name[0] in ascii_lc and inspect.isclass(val)]:
+                        __builtins__[item.__name__] = item
 
         # set quiet output if need
         Selector.quiet_output = quiet_output
@@ -157,9 +157,9 @@ class Database(object):
         # or do not belong to anything and set aliases and references for each
         for coll in collections:
             # gather fields
-            coll._meta.fields = ['id'] + sorted([
+            coll._meta.fields = ['_id'] + sorted([
                 k for k, v in coll.__dict__.items() if isinstance(v, Field) \
-                and k != 'id'
+                and k != '_id'
             ])
 
             # occupy collection and set reference to this database
@@ -238,18 +238,18 @@ class DocumentMeta(type):
 
         # assign values to fields
         for field in self._meta.fields:
-            if field != 'id':
+            if field != '_id':
                 value = None
                 if field in fields:
                     value = getattr(self, field).type_(fields[field])
                 setattr(document, field, value)
             else:
-                id_ = None
-                if 'id' in fields:
-                    id_ = fields['id']
+                _id = None
+                if '_id' in fields:
+                    _id = fields['_id']
                 elif new__:
-                    id_ = ObjectId() if self._meta.db_ref.gen_ids else None
-                setattr(document, 'id', id_)
+                    _id = ObjectId() if self._meta.db_ref.gen_ids else None
+                setattr(document, '_id', _id)
 
         return document
 
@@ -294,8 +294,19 @@ class Document(object, metaclass=DocumentMeta):
     def one(self, *args, **kwargs):
         pass
 
-    def remove(self):
-        pass
+    def remove(self, safe__=None):
+        if not self._id:
+            raise # TODO: make expression - instance must have _id attr
+        return Query(self).filter(_id = self._id).remove(safe__=safe__)
 
-    def save(self):
-        pass
+    def save(self, safe=None, drop_null=True):
+        doc = {k:v for k,v in self.__dict__.items() if v} if drop_null \
+            else self.__dict__.copy()
+        doc['safe__'] = safe
+        if self._id:
+            doc['upsert__'] = True
+            doc['multi__'] = False
+            del doc['_id']
+            return Query(self.__class__).filter(_id = self._id).update(**doc)
+        else:
+            return Query(self.__class__).create(**doc)
