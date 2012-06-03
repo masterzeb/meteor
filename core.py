@@ -177,7 +177,7 @@ class Configurator(object):
 class Router(object):
     def __init__(self, packages):
         self.routes = [('/ws_connection/?', WSConnection)]
-        self.commands = {}
+        self.events = {}
 
         for package in packages:
             for view in getattr(package, 'views', []):
@@ -192,5 +192,5 @@ class Router(object):
                         package.name, handler.event,
                         '/' if not handler.event.endswith('/') else ''
                     )
-                    self.commands[event] = handler
+                    self.events[event] = handler
             # TODO: add FormBehaviour parsing

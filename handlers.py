@@ -20,15 +20,13 @@ class WSConnection(tornado.websocket.WebSocketHandler):
 
     def on_message(self, message):
         data = message.get('data', None)
-        if 'cmd' in message:
-            handler = self.application.router.commands[message['cmd']](self)
-            handler.execute(data)
-        elif 'event' in message:
-            pass
+        if 'event' in message:
+            handler = self.application.router.events[message['event']](self)
+            handler.handling(data)
 
     @classmethod
     def broadcast(self, criteria=None):
-        print(self.users)
+        pass
 
 
 class View(tornado.web.RequestHandler):
