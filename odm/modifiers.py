@@ -30,8 +30,7 @@ class Modifier(object):
         self.key = key
 
     def prepare(self):
-        op = self.op if hasattr(self, 'op') else \
-            '$' + self.__class__.__name__.rstrip('_')
+        op = getattr(self, 'op', '$' + self.__class__.__name__.rstrip('_'))
         return {op: {self.key: self.val}}
 
 

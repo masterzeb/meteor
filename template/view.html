@@ -1,0 +1,36 @@
+{% raw doctype %}
+
+<html>
+    <head>
+        {% for metatag in meta %}
+            <meta {% for attr, val in metatag.items() %} {{ attr }}="{{ val }}" {% end %} />
+        {% end %}
+
+        {% if favicon %}
+            <link rel="icon" href="{{ static_url(favicon) }}" type="image/x-icon">
+        {% end %}
+
+        {% if title %}
+            <title>{{ title }}</title>
+        {% end %}
+
+        {% for script in scripts %}
+            <script src="{{ static_url(script.get_relative_path(minified)) }}"></script>
+        {% end %}
+
+        {% for style in css %}
+            <link rel="stylesheet" type="text/css" href="{{ static_url(style.get_relative_path(minified)) }}" />
+        {% end %}
+
+        {% if embedded_css %}
+            <style>{% raw embedded_css %}</style>
+        {% end %}
+
+        {% if embedded_js %}
+            <script type="text/javascript">{% raw embedded_js %}</script>
+        {% end %}
+    </head>
+
+    <body>
+    </body>
+</html>

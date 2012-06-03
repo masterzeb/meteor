@@ -115,8 +115,7 @@ class Query(object):
             if not self.scheme._meta.db_ref.quiet_output:
                 safe = None
                 if not self.methods[0] == 'find':
-                    safe_opts =\
-                        self._safe_opts if hasattr(self, '_safe_opts') else {}
+                    safe_opts = getattr(self, '_safe_opts', {})
                     if safe_opts.get('safe', None):
                         del safe_opts['safe']
                         safe = ', safe({0})'.format(str(safe_opts or ''))
@@ -171,7 +170,7 @@ class Query(object):
         return self.cursor
 
     def fetch(self, cast_to=object):
-        if hasattr(self, '_is_empty') and self._is_empty:
+        if getattr(self, '_is_empty', False):
             return tuple()
         if cast_to == object:
             data = (x for x in self)

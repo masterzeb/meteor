@@ -9,6 +9,7 @@ from ..exceptions import SchemaError, InitializationError, ClassmethodError
 
 from ..helpers.plural import Plural
 from ..helpers.decorators import classproperty
+from ..helpers.lists import distinct
 
 from .query import Query, query_method
 from .fields import Field
@@ -57,6 +58,7 @@ class ConvertToObject(SONManipulator):
 
 class Database(object):
     '''
+    # TODO: rewrite
     Database provides access to its collections by collection class name and
     collection alias. It automatically gather all imported classes inherited
     of "Document" and classes derived from "Document" and make references to
@@ -74,12 +76,10 @@ class Database(object):
     Host is '127.0.0.1' by default
     Port is 27017 by default
 
-    Optionally you can pass two additional arguments:
-    gen_ids - to generate object id at client side
-    change_builtins - to add query selectors in __builtins__
-    Both of them are True by default
-
-    quiet_output - to hide warning
+    Optionally you can pass three additional arguments:
+    gen_ids - to generate object id at client side. True by default
+    quiet_output - to hide warning. False by default
+    safe_mode - to set safe quering mode. May be bool or dict (safe options).
     False by default
 
     To see full database info just type
@@ -100,19 +100,7 @@ class Database(object):
         return self._port
 
     def __init__(self, db_name='test', host='127.0.0.1', port=27017,
-            gen_ids=True, change_builtins=True, quiet_output=False,
-            safe_mode=False):
-
-        # adding selectors to __builtins__
-        if change_builtins:
-            from string import ascii_lowercase as ascii_lc
-            from meteor.odm import selectors
-            from meteor.odm import modifiers
-
-            for module in (selectors, modifiers):
-                for item in [val for name, val in module.__dict__.items() \
-                    if name[0] in ascii_lc and inspect.isclass(val)]:
-                        __builtins__[item.__name__] = item
+            gen_ids=True, quiet_output=False, safe_mode=False, models=()):
 
         # set quiet output if need
         Selector.quiet_output = quiet_output
@@ -139,35 +127,23 @@ class Database(object):
         self._collections = {}
         collections = set()
 
-        # gather collections
-        # TODO: replace with module manager
-        for module in sys.modules.values():
-            for cls in module.__dict__.values():
-                if type(cls) == DocumentMeta \
-                    and len([f for f in cls.__dict__.values() \
-                        if isinstance(f, Field)]) \
-                    and (not hasattr(cls._meta, '_db') \
-                        or cls._meta._db == self.name):
-                            collections.add(cls)
+        # take the collections that belong to this database
+        # or do not belong to anything
+        for model in models:
+            if len(model._meta.fields) and \
+                getattr(model._meta, 'db', self.name) == self.name:
+                    collections.add(model)
 
         # create plural maker
         plural = Plural()
 
-        # take the collections that belong to this database
-        # or do not belong to anything and set aliases and references for each
+        # set aliases and references for each collection
         for coll in collections:
-            # gather fields
-            coll._meta.fields = ['_id'] + sorted([
-                k for k, v in coll.__dict__.items() if isinstance(v, Field) \
-                and k != '_id'
-            ])
-
             # occupy collection and set reference to this database
             setattr(coll._meta, 'db', self._name)
             setattr(coll._meta, 'db_ref', self)
 
-            if hasattr(coll._meta, 'alias') and \
-                coll._meta.alias.startswith('_'):
+            if getattr(coll._meta, 'alias', '').startswith('_'):
                 raise SchemaError.metadata_naming_exc(
                     coll._meta.alias, coll.__module__, coll.__name__)
 
@@ -205,19 +181,25 @@ class DocumentMeta(type):
     ''' Metaclass for all documents. '''
 
     def __new__(self, *args):
-        # assign MetaData
-        class MetaData: pass
-        if not 'MetaData' in args[2]:
-            args[2]['_meta'] = MetaData
-        else:
-            args[2]['_meta'] = args[2]['MetaData']
-            del args[2]['MetaData']
+        if not args[0] == 'Document':
+            # assign MetaData
+            class MetaData: pass
+            if not 'MetaData' in args[2]:
+                args[2]['_meta'] = MetaData
+            else:
+                args[2]['_meta'] = args[2]['MetaData']
+                del args[2]['MetaData']
 
-        # verification of field names
-        for field in [k for k, v in args[2].items() if isinstance(v, Field)]:
-            if '__' in field:
-                raise SchemaError.field_naming_exc(
-                    field, args[2]['__module__'], args[0])
+            # gather fields
+            fields = [k for k, v in args[2].items() if isinstance(v, Field)]
+            args[2]['_meta'].fields =\
+                distinct(['_id'] + sorted([f for f in fields if f != '_id']))
+
+            # verification of field names
+            for field in fields:
+                if '__' in field:
+                    raise SchemaError.field_naming_exc(
+                        field, args[2]['__module__'], args[0])
         return type.__new__(self, *args)
 
     def __call__(self, new__=True, validation__=True, **fields):
@@ -271,8 +253,7 @@ class Document(object, metaclass=DocumentMeta):
 
     @classproperty
     def provider(self):
-        return self._meta.alias if \
-            hasattr(self._meta, 'alias') else self.__name__
+        return getattr(self._meta, 'alias', self.__name__)
 
     @odmclassmethod
     @query_method

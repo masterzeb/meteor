@@ -1,0 +1,73 @@
+<h1>Welcome</h1>
+
+<table align="center" cellpadding="0" cellspacing="0">
+    <tr><td class="header_row" colspan="2">Meteor info</td></tr>
+    <tr>
+        <td>Version</td>
+        <td>{{ meteor_version }}</td>
+    </tr>
+    <tr><td>Based on</td><td>
+        <a target="_blank" href="http://www.tornadoweb.org"/>Tornado v{{ tornado_version }}</a>
+        <br /><a target="_blank" href="http://api.mongodb.org/python/{{ pymongo_version_href }}"/>pymongo v{{ pymongo_version}}</a></td>
+    </tr>
+    <tr>
+        <td>Trunk version</td>
+        <td><a target="_blank" href="https://github.com/master-zeb/meteor">available here</a></td>
+    </tr>
+    <tr>
+        <td>Documentation</td>
+        <td><a target="_blank" href="https://github.com/master-zeb/meteor/wiki">available here</a></td>
+    </tr>
+    <tr>
+        <td>Created by</td>
+        <td><a href="mailto:ziberbulger@gmail.com">Savasteev Denis</a></td>
+    </tr>
+</table>
+
+<table align="center" cellpadding="0" cellspacing="0">
+    <tr><td class="header_row" colspan="2">Application packages</td></tr>
+    {% for package in packages %}
+        <tr>
+            <td>{{ package.name }} <br />({{ len(package.models) }} models, {{ len(package.forms) }} forms)</td>
+            <td>{% raw package.description|linebreaks|trim or 'no description' %}</td>
+        </tr>
+    {% end %}
+</table>
+
+<table align="center" cellpadding="0" cellspacing="0">
+    <tr><td class="header_row" colspan="2">Application databases</td></tr>
+    {% for k, v in databases.items() %}
+        <tr><td>{{ k }}</td><td>{{ v.name }}@{{ v.host }}:{{ v.port }} ({{ len(v._collections) }} collections)</td></tr>
+    {% end %}
+</table>
+
+<table align="center" cellpadding="0" cellspacing="0">
+    <tr><td class="header_row" colspan="2">Application settings</td></tr>
+    {% for k, v in settings.items() %}
+        <tr><td>{{ k }}</td><td>{{ v }}</td></tr>
+    {% end %}
+</table>
+
+<table align="center" cellpadding="0" cellspacing="0">
+    <tr><td class="header_row" colspan="2">Views metadata</td></tr>
+    {% for k,v in metadata.items() %}
+        <tr>
+        {% if k == 'meta' %}
+            <td>metatags</td><td>
+            {% for metatag in v %}
+                {{ '<meta ' }}
+                {% for k in reversed(sorted(metatag.keys())) %}
+                    {{ k }}="{{ metatag[k] }}"
+                {% end %}
+                {{ '/>' }}
+                <br />
+            {% end %}
+            </td>
+        {% else %}
+            <td>{{ k }}</td><td>{{ v if v else 'no ' + k}}</td>
+        {% end %}
+        </tr>
+    {% end %}
+</table>
+
+<div align="center" class="ws_test">Connecting to WebSockets ...</div>

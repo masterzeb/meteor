@@ -1,6 +1,6 @@
 import logging
 
-def configure(level='info', paint=False):
+def configure(level='info', colored=False):
     '''
     Configure logging with custom format and optionally colorize it by
     special ANSI escape sequences
@@ -35,7 +35,7 @@ def configure(level='info', paint=False):
     log_level = getattr(logging, level.upper())
 
     # change format
-    if paint:
+    if colored:
         fmt = '{0}{1}[{2} {3}]{4}{0} {5}{4}'.format(
             '%(color)s', set_bold, '%(asctime)-15s',
             '%(levelname)s', reset, '%(message)s'

@@ -23,11 +23,10 @@ def check_args_types(method):
         # allow values to be same class as self or not
         for i, prefix in enumerate(['', 'kw']):
             allow = prefix + 'arg_types_same'
-            if hasattr(self, allow):
-                if getattr(self, allow):
-                    allowed_types[i].append(self.__class__)
-                elif self.__class__ in allowed_types[i]:
-                    allowed_types[i].remove(self.__class__)
+            if getattr(self, allow, False):
+                allowed_types[i].append(self.__class__)
+            elif self.__class__ in allowed_types[i]:
+                allowed_types[i].remove(self.__class__)
 
         # validate values
         for i, values in enumerate([args, [val for val in kwargs.values()]]):
@@ -89,7 +88,7 @@ class Selector(object):
             self.key = key
 
             # change key requirement
-            if hasattr(self, 'require_key'):
+            if getattr(self, 'require_key', True):
                 self.require_key = False
 
             # transfer key into

@@ -8,14 +8,15 @@ Meteor (as Tornado) should run on any Unix-like platform, although for the best 
 Meteor mainly focuses on:
 - working with web sockets
 - simple working with database models, forms and templating
-- structuring code at client and server sides and principle "write less - do more"
+- principle "write less - do more"
 - modular structure of the project
 - easy creating, supporting and scaling project
 - application perfomance
 
-Meteor can be used to:
-- Rapid creation of RIA
-- Creation of high-load internet applications
+Meteor can be used as:
+- Tool to rapid creation of RIA
+- Tool to creation of high-load internet applications
+- Intermediate between front-end and backend
 
 Requirements:
 - python 3.2
@@ -24,4 +25,4 @@ Requirements:
 - MongoDB >= 2.0
 - pymongo3 >= 1.9
 
-License: LGPL or MIT
+License: LGPL or MIT or Apache License (not finally approved at the moment)
