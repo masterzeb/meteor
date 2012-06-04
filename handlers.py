@@ -30,6 +30,10 @@ class WSConnection(tornado.websocket.WebSocketHandler):
 
 
 class View(tornado.web.RequestHandler):
+    @property
+    def package(self):
+        return self.application.package_manager.get_package(self.__class__).name
+
     def embedded_css(self):
         return ''
 
@@ -66,8 +70,10 @@ class View(tornado.web.RequestHandler):
         metadata.update({
             'embedded_css': self.embedded_css(),
             'embedded_js': self.embedded_js(),
-            'scripts': self.application.static_manager.get_chain('js'),
-            'css': self.application.static_manager.get_chain('css'),
+            'scripts':
+                self.application.static_manager.get_chain('js', self.package),
+            'css':
+                self.application.static_manager.get_chain('css', self.package),
             'minified': self.settings['use_compressed_static']
         })
 

@@ -15,7 +15,7 @@ class WelcomeView(meteor.core.View):
             meteor_version=meteor.version, pymongo_version=pymongo.version,
             pymongo_version_href = r.match(pymongo.version).groups()[0],
 
-            packages=self.application.packages,
+            packages=self.application.package_manager.packages,
             settings=self.application.settings,
             databases=self.application.databases,
             metadata=self.application.views_metadata

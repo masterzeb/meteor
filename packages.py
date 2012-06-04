@@ -89,3 +89,8 @@ class PackagesManager(object):
         for package in self.packages:
             items.extend(getattr(package, name, []))
         return items
+
+    def get_package(self, cls, name='views'):
+        for package in self.packages:
+            if cls in getattr(package, name, []):
+                return package

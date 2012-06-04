@@ -15,6 +15,7 @@ from string import ascii_lowercase
 from .client import StaticManager
 from .handlers import EventHandler, View, WSConnection
 from .helpers import log
+from .helpers.dictonaries import extend
 from .odm import selectors
 from .odm import modifiers
 from .odm.core import Database
@@ -33,23 +34,22 @@ class Application(tornado.web.Application):
             self.views_metadata, log_config,= Configurator(app_path).data
 
         # gather packages
-        package_manager = PackagesManager(exclude_packages)
-        self.packages = package_manager.packages
+        self.package_manager = PackagesManager(exclude_packages)
         for package in extra_packages:
             if not isinstance(package, Package):
                 raise # TODO: make expression - non-Package in extra_packages
             if not package.name in exclude_packages:
-                self.package.append(package)
+                self.package_manager.packages.append(package)
 
         # creating databases
         self.databases = {}
-        models = package_manager.get_all('models')
+        models = self.package_manager.get_all('models')
         for alias, opts in databases.items():
             opts['models'] = models
             self.databases[alias] = Database(**opts)
 
         # make routes
-        self.router = Router(self.packages)
+        self.router = Router(self.package_manager.packages)
         handlers = self.router.routes
 
         # configure logging
@@ -64,10 +64,10 @@ class Application(tornado.web.Application):
             settings['static_path'] = os.path.join(app_path, 'static')
 
         # gather static libs
-        static_libs_requirements = {'meteor.js': ('jquery', 'underscore')}
-        static_libs_requirements.update(extra_static_libs_requirements)
-        self.static_manager = StaticManager(
-            settings['static_path'], static_libs_requirements, self.packages)
+        requirements = {'meteor.js': ['jquery', 'underscore']}
+        requirements = extend(requirements, extra_static_libs_requirements)
+        self.static_manager = StaticManager(settings['static_path'],
+            requirements, self.package_manager.packages)
 
         # call parent __init__ method
         super(Application, self).__init__(handlers, **settings)

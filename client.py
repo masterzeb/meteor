@@ -6,9 +6,6 @@ from .helpers.lists import distinct
 class StaticManager(object):
     def __init__(self, static_path, libs_requirements, packages):
         self.static_path = static_path
-
-        self.js = []
-        self.css = []
         self.libs = {'js': {}, 'css': {}}
 
         # gather static libs with requirements
@@ -24,27 +21,27 @@ class StaticManager(object):
 
         # gather packages static
         for package in packages:
-            self.find_libs(package.name)
+            self.find_libs(package.name, True)
 
-    def append_lib(self, path, name, ext, require=()):
-        lib = StaticLib(self.static_path, path, name, ext, require)
-        self.libs[ext][name] = lib
-        getattr(self, ext).append(lib)
+    def append_lib(self, path, name, ext, require=(), package=None):
+        lib = StaticLib(self.static_path, path, name, ext, require, package)
+        self.libs[ext][lib.full_name] = lib
 
-    def find_libs(self, directory):
+    def find_libs(self, directory, is_package=False):
         path = os.path.join(self.static_path, directory)
+        package = directory if is_package else None
         if os.path.exists(path):
             for filename in os.listdir(path):
                 if os.path.isfile(os.path.join(path, filename)):
                     name, ext = self.parse_filename(filename)
                     if not name in self.libs[ext]:
-                        self.append_lib(path, name, ext)
+                        self.append_lib(path, name, ext, package=package)
 
-    def get_chain(self, ext):
-        libs = getattr(self, ext)
+    def get_chain(self, ext, package=None):
         result = []
-        for lib in libs:
-            result.extend(self.get_lib_chain(lib.name, ext))
+        for lib in self.libs[ext].values():
+            if (package and lib.package == package) or lib.package is None:
+                result.extend(self.get_lib_chain(lib.full_name, ext))
         return distinct(result)
 
     def get_lib_chain(self, libname, ext):
@@ -64,12 +61,18 @@ class StaticManager(object):
 
 
 class StaticLib(object):
-    def __init__(self, static_path, path, name, ext, require=()):
+    def __init__(self, static_path, path, name, ext, require=(), package=None):
         self.static_path = static_path
         self.path = path
         self.name = name
         self.ext = ext
         self.require = require
+        self.package = package
+
+    @property
+    def full_name(self):
+        return '/'.join([self.package, self.name]) \
+            if self.package else self.name
 
     def get_relative_path(self, minified=False):
         path = self.path.replace(self.static_path, '')
@@ -81,4 +84,4 @@ class StaticLib(object):
         return result.lstrip('/')
 
     def __str__(self):
-        return self.name
+        return self.full_name
