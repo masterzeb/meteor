@@ -16,8 +16,13 @@ function Meteor() {
 
     this.ws.onmessage = function(event) {
         var data = JSON.parse(event.data);
-        callback = _this.reactor.events[data['event']];
+        var map = _this.reactor.events[data['event']];
+        var callback = data.timestamp ? map[data.timestamp] : map.default;
         if (callback) callback(data.data);
+
+        if (data.timestamp) {
+            delete _this.reactor.events[data['event']][data.timestamp];
+        }
     }
 
     this.onReady = function(callback) {
@@ -44,20 +49,43 @@ function Meteor() {
 function Reactor() {
     this.events = {};
 
-    this.addEvent = function(name, callback) {
-        this.events[name] = callback;
+    this.addEvent = function(args) {
+        var options = $.extend({
+            name: '', callback: null, timestamp: null
+        }, args);
+
+        if ((options.name) && (options.callback)) {
+            var key = options.timestamp ? options.timestamp : 'default';
+            if (!this.events[options.name]) {
+                this.events[options.name] = {}
+            }
+            this.events[options.name][key] = options.callback;
+        }
     }
 }
 
-function MeteorEvent(event_name, event_data, callback, options) {
-    var opts = $.extend({'autosend': true}, options);
-    event_data = event_data || {}
+function MeteorEvent(args) {
+    var options = $.extend({
+        name: '',
+        data: {},
+        callback: null,
+        autosend: true
+    }, args);
 
-    this.message = {"event": event_name, "data": event_data}
-    this.callback = callback;
+    this.message = {"event": options.name, "data": options.data}
+    this.callback = options.callback;
 
-    if (callback) meteor.reactor.addEvent(event_name, callback);
-    if (opts['autosend']) meteor.send(this)
+    var timestamp = options.callback ? (new Date).getTime() : null
+    if (timestamp) this.message.timestamp = timestamp;
+
+    if (options.callback) {
+        meteor.reactor.addEvent({
+            name: options.name,
+            callback: options.callback,
+            timestamp: timestamp
+        });
+    }
+    if (options.autosend) meteor.send(this);
 }
 
 var meteor = new Meteor();

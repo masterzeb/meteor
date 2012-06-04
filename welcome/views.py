@@ -24,13 +24,15 @@ class WelcomeView(meteor.core.View):
     def embedded_js(self):
         return '''
         meteor.onReady(function() {
-            new MeteorEvent("meteor.welcome/test", {'test': true},
-                function(data) {
+            new MeteorEvent({
+                name: "meteor.welcome/test",
+                data: {'test': true},
+                callback: function(data) {
                     if (data.test) {
                         $(".ws_test").text('WebSockets works correctly !!!')
                     }
                 }
-            )
+            })
         });
         '''
 

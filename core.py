@@ -64,7 +64,7 @@ class Application(tornado.web.Application):
             settings['static_path'] = os.path.join(app_path, 'static')
 
         # gather static libs
-        requirements = {'meteor.js': ['jquery', 'underscore']}
+        requirements = {'meteor.js': ['jquery']}
         requirements = extend(requirements, extra_static_libs_requirements)
         self.static_manager = StaticManager(settings['static_path'],
             requirements, self.package_manager.packages)

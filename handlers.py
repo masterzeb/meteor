@@ -22,10 +22,10 @@ class WSConnection(tornado.websocket.WebSocketHandler):
 
     def on_message(self, message):
         message = json_decode(message)
-        data = message.get('data', {})
         if 'event' in message:
             handler = self.application.router.events[message['event']](self)
-            handler.handling(data)
+            handler.timestamp = message.get('timestamp', None)
+            handler.handling(message.get('data', {}))
 
 
 class View(tornado.web.RequestHandler):
@@ -98,8 +98,16 @@ class EventHandler(object):
         return self.application.package_manager.get_package(
             self.__class__, 'handlers').name
 
-    def send(self, data, event=None, **kwargs):
-        event = event or '/'.join([self.package, self.event])
+    @property
+    def event_fullname(self):
+        return '/'.join([self.package, self.event])
+
+    def send(self, event, data, **kwargs):
         message = {'event': event, 'data': data}
         message.update(kwargs)
         self.connection.write_message(json_encode(message))
+
+    def answer(self, data, **kwargs):
+        if self.timestamp:
+            kwargs.update({'timestamp': self.timestamp})
+        self.send(self.event_fullname, data, **kwargs)
