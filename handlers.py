@@ -1,3 +1,4 @@
+import re
 import inspect
 import os
 import sys
@@ -5,6 +6,7 @@ import sys
 import tornado.web
 import tornado.websocket
 import tornado.util
+from tornado.escape import json_encode, json_decode
 
 from .template import filters
 
@@ -19,14 +21,11 @@ class WSConnection(tornado.websocket.WebSocketHandler):
         WSConnection.users.remove(self)
 
     def on_message(self, message):
-        data = message.get('data', None)
+        message = json_decode(message)
+        data = message.get('data', {})
         if 'event' in message:
             handler = self.application.router.events[message['event']](self)
             handler.handling(data)
-
-    @classmethod
-    def broadcast(self, criteria=None):
-        pass
 
 
 class View(tornado.web.RequestHandler):
@@ -91,6 +90,16 @@ class View(tornado.web.RequestHandler):
 class EventHandler(object):
     def __init__(self, connection):
         self.connection = connection
+        self.application = connection.application
+        # TODO: add more references
 
-    def send(self, data):
-        self.connection.write_message(data)
+    @property
+    def package(self):
+        return self.application.package_manager.get_package(
+            self.__class__, 'handlers').name
+
+    def send(self, data, event=None, **kwargs):
+        event = event or '/'.join([self.package, self.event])
+        message = {'event': event, 'data': data}
+        message.update(kwargs)
+        self.connection.write_message(json_encode(message))

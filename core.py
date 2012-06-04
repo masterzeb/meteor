@@ -188,9 +188,6 @@ class Router(object):
                     self.routes.append((url, view))
             for handler in getattr(package, 'handlers', []):
                 if hasattr(handler, 'event'):
-                    event = r'/{0}/{1}{2}?'.format(
-                        package.name, handler.event,
-                        '/' if not handler.event.endswith('/') else ''
-                    )
+                    event = r'{0}/{1}'.format(package.name, handler.event)
                     self.events[event] = handler
             # TODO: add FormBehaviour parsing
