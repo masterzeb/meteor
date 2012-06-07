@@ -18,10 +18,12 @@ function Meteor() {
         var data = JSON.parse(event.data);
         var map = _this.reactor.events[data['event']];
         var callback = data.timestamp ? map[data.timestamp] : map.default;
-        if (callback) callback(data.data);
+        if (callback) {
+            callback(data.data);
 
-        if (data.timestamp) {
-            delete _this.reactor.events[data['event']][data.timestamp];
+            if (data.timestamp) {
+                delete _this.reactor.events[data['event']][data.timestamp];
+            }
         }
     }
 

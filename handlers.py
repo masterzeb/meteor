@@ -25,6 +25,7 @@ class WSConnection(tornado.websocket.WebSocketHandler):
         if 'event' in message:
             handler = self.application.router.events[message['event']](self)
             handler.timestamp = message.get('timestamp', None)
+            handler.prepare()
             handler.handling(message.get('data', {}))
 
 
@@ -101,6 +102,10 @@ class EventHandler(object):
     @property
     def event_fullname(self):
         return '/'.join([self.package, self.event])
+
+    def prepare(self):
+        for name, ref in self.application.databases.items():
+            setattr(self, name, ref)
 
     def send(self, event, data, **kwargs):
         message = {'event': event, 'data': data}

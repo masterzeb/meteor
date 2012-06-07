@@ -24,7 +24,8 @@ from .packages import PackagesManager, Package
 
 class Application(tornado.web.Application):
     def __init__(self, extra_handlers=(), extra_settings={}, extra_packages=(),
-            exclude_packages=(), extra_static_libs_requirements={}):
+            exclude_packages=(), extra_static_libs_requirements={},
+            ws_connection=WSConnection):
 
         # define paths
         app_path = sys.path[0]
@@ -49,7 +50,9 @@ class Application(tornado.web.Application):
             self.databases[alias] = Database(**opts)
 
         # make routes
-        self.router = Router(self.package_manager.packages)
+        if not WSConnection in ws_connection.__mro__:
+            raise # TODO: make expression
+        self.router = Router(self.package_manager.packages, ws_connection)
         handlers = self.router.routes
 
         # configure logging
@@ -175,8 +178,8 @@ class Configurator(object):
 
 
 class Router(object):
-    def __init__(self, packages):
-        self.routes = [('/ws_connection/?', WSConnection)]
+    def __init__(self, packages, ws_connection):
+        self.routes = [('/ws_connection/?', ws_connection)]
         self.events = {}
 
         for package in packages:
