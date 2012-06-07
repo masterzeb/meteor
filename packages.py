@@ -14,18 +14,17 @@ class Package(object):
         self.name = module.__name__
         self.description = getattr(module, 'description', '')
 
-        # gather models
-        self.models = []
+        self.schemes = []
         self.views = []
         self.handlers = []
         self.forms = []
 
         try:
-            # gather models
-            models = importlib.import_module('.models', module.__package__)
-            for name, obj in inspect.getmembers(models):
+            # gather schemes
+            schemes = importlib.import_module('.schemes', module.__package__)
+            for name, obj in inspect.getmembers(schemes):
                 if type(obj) == DocumentMeta and obj != Document:
-                    self.models.append(obj)
+                    self.schemes.append(obj)
         except ImportError:
             pass
 

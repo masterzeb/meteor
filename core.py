@@ -44,9 +44,9 @@ class Application(tornado.web.Application):
 
         # creating databases
         self.databases = {}
-        models = self.package_manager.get_all('models')
+        schemes = self.package_manager.get_all('schemes')
         for alias, opts in databases.items():
-            opts['models'] = models
+            opts['schemes'] = schemes
             self.databases[alias] = Database(**opts)
 
         # make routes

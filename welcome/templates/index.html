@@ -28,7 +28,7 @@
     <tr><td class="header_row" colspan="2">Application packages</td></tr>
     {% for package in packages %}
         <tr>
-            <td>{{ package.name }} <br />({{ len(package.models) }} models, {{ len(package.forms) }} forms)</td>
+            <td>{{ package.name }} <br />({{ len(package.schemes) }} schemes, {{ len(package.forms) }} forms)</td>
             <td>{% raw package.description|linebreaks|trim or 'no description' %}</td>
         </tr>
     {% end %}

@@ -100,7 +100,7 @@ class Database(object):
         return self._port
 
     def __init__(self, db_name='test', host='127.0.0.1', port=27017,
-            gen_ids=True, quiet_output=False, safe_mode=False, models=()):
+            gen_ids=True, quiet_output=False, safe_mode=False, schemes=()):
 
         # set quiet output if need
         Selector.quiet_output = quiet_output
@@ -129,10 +129,10 @@ class Database(object):
 
         # take the collections that belong to this database
         # or do not belong to anything
-        for model in models:
-            if len(model._meta.fields) and \
-                getattr(model._meta, 'db', self.name) == self.name:
-                    collections.add(model)
+        for scheme in schemes:
+            if len(scheme._meta.fields) and \
+                getattr(scheme._meta, 'db', self.name) == self.name:
+                    collections.add(scheme)
 
         # create plural maker
         plural = Plural()
