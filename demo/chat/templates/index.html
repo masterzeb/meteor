@@ -1,0 +1,17 @@
+<div id="chat_wrapper" align="center">
+    <div id="chat">
+        <span class="system">Welcome !!! {{ count }} other users are in chat at the moment.
+            {% if len(history) %} Last {{ len(history) }} messages: {% end %}</span><br />
+        {% for message in history %}
+            {% if message.system %}
+                <span class="system">*{{ message.user }} {{ message.content }}</span><br />
+            {% else %}
+                <span><b><i>{{ message.user }}</i></b>: {{ message.content }}</span><br />
+            {% end %}
+        {% end %}
+        <hr>
+    </div>
+</div>
+<div id="message_wrapper" align="center">
+    <textarea id="message"></textarea>
+</div>

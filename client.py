@@ -25,7 +25,8 @@ class StaticManager(object):
 
     def append_lib(self, path, name, ext, require=(), package=None):
         lib = StaticLib(self.static_path, path, name, ext, require, package)
-        self.libs[ext][lib.full_name] = lib
+        if not lib.full_name in self.libs[ext]:
+            self.libs[ext][lib.full_name] = lib
 
     def find_libs(self, directory, is_package=False):
         path = os.path.join(self.static_path, directory)
@@ -34,8 +35,8 @@ class StaticManager(object):
             for filename in os.listdir(path):
                 if os.path.isfile(os.path.join(path, filename)):
                     name, ext = self.parse_filename(filename)
-                    if not name in self.libs[ext]:
-                        self.append_lib(path, name, ext, package=package)
+                    require = ('meteor', ) if is_package and ext == 'js' else ()
+                    self.append_lib(path, name, ext, require, package)
 
     def get_chain(self, ext, package=None):
         result = []

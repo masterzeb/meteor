@@ -19,6 +19,8 @@ class Package(object):
         self.handlers = []
         self.forms = []
 
+        # TODO: rewrite try/except to os.path.exists cause ImportError may be
+        # in module
         try:
             # gather schemes
             schemes = importlib.import_module('.schemes', module.__package__)

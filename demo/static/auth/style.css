@@ -1,0 +1,5 @@
+#wrapper {padding-top: 300px;}
+#auth_form {background: orange; border-radius: 20px; height: 70px; width: 500px; padding-top: 10px;}
+input {margin-top: 10px; height: 25px; width: 350px; border-radius: 10px; border: orange solid 1px;
+font-family: Lucida Grande,arial,verdana,sans-serif,Lucida Sans; font-size: 14pt; text-align: center;}
+label {color: white; font-weight: bold;}

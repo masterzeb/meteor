@@ -128,7 +128,8 @@ def create_package(app_path, package_name):
         '__init__': 'meteor_package = True\ndescription = \'{0}\'\n' \
             .format(description),
         'views': 'from meteor.handlers import View\n',
-        'schemes': 'from meteor.odm.core import Document\n',
+        'schemes': 'from meteor.odm.core import Document\n' +\
+            'from meteor.odm import fields\n',
         #'forms': 'from meteor.odm.core import Form\n',
         'handlers': 'from meteor.handlers import EventHandler\n',
     }

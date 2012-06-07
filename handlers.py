@@ -1,3 +1,4 @@
+import logging
 import re
 import inspect
 import os
@@ -14,19 +15,39 @@ from .template import filters
 class WSConnection(tornado.websocket.WebSocketHandler):
     users = set()
 
+    def __init__(self, *args, **kwargs):
+        super(WSConnection, self).__init__(*args, **kwargs)
+        for name, ref in self.application.databases.items():
+            setattr(self, name, ref)
+
     def open(self):
         WSConnection.users.add(self)
 
     def on_close(self):
-        WSConnection.users.remove(self)
+        try:
+            WSConnection.users.remove(self)
+        except KeyError:
+            pass
 
     def on_message(self, message):
         message = json_decode(message)
         if 'event' in message:
-            handler = self.application.router.events[message['event']](self)
-            handler.timestamp = message.get('timestamp', None)
-            handler.prepare()
-            handler.handling(message.get('data', {}))
+            Handler = self.application.router.events.get(message['event'], None)
+            if Handler:
+                handler = Handler(self)
+                handler.timestamp = message.get('timestamp', None)
+                handler.prepare()
+                handler.handling(message.get('data', {}))
+
+    def write_message(self, message):
+        super(WSConnection, self).write_message(json_encode(message))
+
+    def broadcast(self, event, data, **kwargs):
+        # TODO: add criteria
+        message = {'event': event, 'data': data}
+        message.update(kwargs)
+        for user in self.users:
+            user.write_message(message)
 
 
 class View(tornado.web.RequestHandler):
@@ -89,6 +110,13 @@ class View(tornado.web.RequestHandler):
 
 
 class EventHandler(object):
+    @property
+    def current_user(self):
+        return self.get_current_user() or self.connection.current_user
+
+    def get_current_user(self):
+        return None
+
     def __init__(self, connection):
         self.connection = connection
         self.application = connection.application
@@ -110,9 +138,13 @@ class EventHandler(object):
     def send(self, event, data, **kwargs):
         message = {'event': event, 'data': data}
         message.update(kwargs)
-        self.connection.write_message(json_encode(message))
+        self.connection.write_message(message)
 
     def answer(self, data, **kwargs):
         if self.timestamp:
             kwargs.update({'timestamp': self.timestamp})
         self.send(self.event_fullname, data, **kwargs)
+
+    def broadcast(self, event, data, **kwargs):
+        # TODO: add criteria
+        self.connection.broadcast(event, data, **kwargs)

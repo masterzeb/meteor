@@ -52,6 +52,7 @@ class Application(tornado.web.Application):
         # make routes
         if not WSConnection in ws_connection.__mro__:
             raise # TODO: make expression
+        self.ws_connection = ws_connection
         self.router = Router(self.package_manager.packages, ws_connection)
         handlers = self.router.routes
 

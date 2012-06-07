@@ -1,0 +1,9 @@
+html, body { margin: 0px; padding: 0px; width: 100%; height: 100%;}
+body {min-height: 100%;}
+
+textarea, #chat {width: 95%; padding: 10px; border-radius: 10px; border: orange solid 2px; font-family: Lucida Grande,arial,verdana,sans-serif,Lucida Sans; font-size: 14pt;}
+hr {color: orange;}
+#chat_wrapper {height: 100%; margin-bottom: -75px;}
+#chat {background: #FFF; text-align: left;}
+#chat .system {font-size: 12pt; font-style: italic;}
+#message {height: 45px;}
